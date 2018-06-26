@@ -16,4 +16,7 @@ filter syslog files, create counts...
     grep 'wordpress\[' /var/log/auth.log | ./group-by-10m.sh  | less -S
 
 
+# add dateext to all daily logrotate.d
+
+    perl -p -i -n -e 's/(\s+)daily/$1daily\n$1dateext/' /etc/logrotate.d/*
 
