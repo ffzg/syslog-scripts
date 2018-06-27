@@ -3,6 +3,12 @@ filter syslog files, create counts...
 
 # group output by time
 
+## overview of any log file
+
+This should give you idea what you can grep for to find in that file:
+
+    cat /var/log/syslog | cut -d' ' -f-5 | sed 's/\[[0-9]*\]//' | ./group-by-10m.sh | less -S
+
 ## mail
 
     grep -i from= /var/log/mail.log | grep to= | sed -e 's/\[.*from=/ from=/' | ./group-by-1h.sh  | less -S
