@@ -20,3 +20,9 @@ filter syslog files, create counts...
 
     perl -p -i -n -e 's/(\s+)daily/$1daily\n$1dateext/' /etc/logrotate.d/*
 
+# slapd
+
+show uses with more than 5 ldap ENTRY requests
+
+    grep slapd /var/log/syslog | grep ENTRY | sed -e 's/: conn=.*ENTRY//' | ./group-by-10m.sh | grep -v '^ *[1234] ' | less -S
+
