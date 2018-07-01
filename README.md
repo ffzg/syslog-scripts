@@ -32,3 +32,8 @@ show uses with more than 5 ldap ENTRY requests
 
     grep slapd /var/log/syslog | grep ENTRY | sed -e 's/: conn=.*ENTRY//' | ./group-by-10m.sh | grep -v '^ *[1234] ' | less -S
 
+# fail2ban
+
+show number of ban/unban events on group by priod
+
+    grep NOTICE /var/log/fail2ban.log | sed -e 's/ [0-9\.]*$//' | ./group-by-1h.sh
