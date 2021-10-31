@@ -1,0 +1,126 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use lib $ENV{'MUNIN_LIBDIR'};
+use Munin::Plugin;
+
+# -*- perl -*-
+
+=head1 NAME
+
+log - Plugin to monitor log files
+
+=head1 CONFIGURATION
+
+add munin user to adm group if needed to read C</var/log/*.log>
+
+  [log]
+  group adm
+
+=head1 MAGIC MARKERS
+
+ #%# family=auto
+ #%# capabilities=autoconf
+
+=cut
+
+my $log = '/var/log/syslog';
+
+my ( $pos, $firewall_labels ) = restore_state();
+$firewall_labels = [ split(/,/, $firewall_labels) ];
+
+if ( $ARGV[0] ) {
+
+    if ( $ARGV[0] eq 'autoconf' ) {
+	print -r $log ? "yes\n" : "no\n";
+    } elsif ( $ARGV[0] eq 'config' ) {
+	print <<EOM;
+multigraph stunnel
+graph_category log
+graph_title stunnel clients
+clients.label clients
+
+multigraph stunnel_transfer
+graph_category log
+graph_title stunnel transfer
+graph_vlabel bytes/\${graph_period}
+ssl.label SSL
+ssl.draw AREA
+socket.label Socket
+socket.draw LINE2
+
+multigraph n2n
+graph_category log
+graph_title n2n peers
+pending.label Pending peers
+operational.label Operational peers
+
+multigraph lines
+graph_category log
+graph_title log lines
+stunnel.label stunnel
+n2n.label n2n
+ignored.label ignored
+firewall.label firewall
+
+multigraph firewall
+graph_category log
+graph_title firewall
+EOM
+print "$_.label $_\n" foreach (@$firewall_labels);
+    }
+    exit 0;
+}
+
+#my ( $pos ) = restore_state();
+$pos = -s $log unless defined $pos;
+my ($fh,$reset) = tail_open($log,$pos);
+
+my $ip;
+my $stat;
+
+my $firewall_label_count;
+
+while(<$fh>) {
+	if ( m/stunnel/ ) {
+		$stat->{lines}->{stunnel}++;
+		if ( m/accepted connection from (.+):\d+/ ) {
+			$ip->{$1}++;
+		} elsif ( m/Connection closed: (\d+) bytes sent to SSL, (\d+) bytes sent to socket/i ) {
+			$stat->{stunnel_transfer}->{ssl}    += $1;
+			$stat->{stunnel_transfer}->{socket} += $2;
+		}
+	} elsif ( m/n2n/ ) {
+		$stat->{lines}->{n2n}++;
+		if ( m/Pending peers list size=(\d+)/ ) {
+			$stat->{n2n}->{pending} = $1; # latest
+		} elsif ( m/Operational peers list size=(\d+)/ ) {
+			$stat->{n2n}->{operational} = $1; # latest
+		} elsif ( m/pending=(\d+), operational=(\d+)/ ) {
+			$stat->{n2n} = { pending => $1, operational => $2 };
+		}
+	} elsif ( m/core firewall (\w+)/ ) {
+		$stat->{lines}->{firewall}++;
+		$firewall_label_count->{$1}++;
+		#		$stat->{firewall}->{$1}++;
+	} else {
+		$stat->{lines}->{ignored}++;
+	}
+}
+
+$stat->{stunnel}->{clients} = scalar keys %$ip if $ip;
+
+foreach my $graph ( keys %$stat ) {
+	print "multigraph $graph\n";
+	print "$_.value $stat->{$graph}->{$_}\n" foreach keys %{ $stat->{$graph} };
+}
+
+print "multigraph firewall\n";
+while (my ($label, $value) = each %$firewall_label_count) {
+	print "$label.value $value\n";
+}
+
+
+$pos = tail_close($fh);
+save_state($pos, join(',', keys %{ $firewall_label_count }));
+
