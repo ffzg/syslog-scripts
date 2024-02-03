@@ -30,6 +30,15 @@ my %mon2num = qw(
 );
 
 
+sub mdt2iso {
+	my ( $mon, $d, $t ) = @_;
+	my $m = $mon2num{lc$mon};
+
+	$t = sprintf "%04d-%02d-%02dT%s",
+		$m <= 2 ? 2024 : 2023, $m, $d, $t;
+	warn "## $mon $d $t -> $t\n" if $debug;
+	return $t;
+}
 
 while(my $line = <$pipe>) {
 	chomp $line;
@@ -37,24 +46,14 @@ while(my $line = <$pipe>) {
 	# grep pipe in
 	# /var/log/syslog-20240201.gz:Jan 31 09:27:07 dns01 dhcpd[2453293
 	$line =~ s{^/var/log/[^:]+:}{};
-	warn "$line";
 
+	# rewrite time to iso
 	# Feb  3 10:40:18 wap-lib-1s hostapd: wlan0: AP-STA-DISCONNECTED 0a:51:07:36:ec:3d
+	$line =~ s{^(\w\w\w)\s+(\d+)\s([0-2][0-9:]*)}{mdt2iso($1,$2,$3)}ge;
+
+	warn "$line\n" if $debug;
+
 	if (
-		my ( $t, $wap, $if, $status, $mac ) = $line =~
-	       	m/^(\w+\s+\d+\s+\S+) (\S+) \S+ ([^:]+): AP-STA-(\S+) (\S+)/ ) {
-
-		my ( $mon, $d, $t ) = split(/\s+/,$t);
-		my $m = $mon2num{lc$mon};
-
-		$t = sprintf "%04d-%02d-%02d %s",
-			$m <= 2 ? 2024 : 2023, $m, $d, $t;
-
-		warn "$t $wap $if $status $mac\n";
-
-		$stat->{$mac}->{ $t .' '. $wap }->{$status} = $if;
-
-	} elsif (
 	# 2024-02-03T11:20:39+01:00 wap-b300-j hostapd: wlan0-2: AP-STA-DISCONNECTED ec:63:d7:f9:44:c1
 	# 2024-02-03T13:36:33.306803+01:00 wap-lib-0j hostapd: wlan1: AP-STA-CONNECTED 64:79:f0:5b:8e:f7
 		my ($t, $wap, $if, $status, $mac ) = $line =~
